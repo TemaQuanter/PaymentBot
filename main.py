@@ -7,7 +7,7 @@ import os
 import json
 
 from utils.transaction import extract_transaction_details
-from bot.bot import Bot
+from bot.bot import bot_poll
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -15,8 +15,5 @@ load_dotenv()
 # Get environmental variables.
 telegram_bot_api = os.getenv('TG_BOT_API')
 
-# Initialize telegram bot.
-bot = Bot(telegram_bot_api)
-
 # Start polling the bot.
-bot.poll()
+bot_poll(telegram_bot_api)
