@@ -1,0 +1,33 @@
+version: "3"
+
+services:
+  trading-bot:
+    build:
+      context: .
+      dockerfile: docker/bot.dockerfile
+    restart: always
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - postgres
+    ports:
+      - 8080:8080
+
+  postgres:
+    build:
+      context: .
+      dockerfile: docker/postgresql.dockerfile
+    restart: always
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - openai-trader-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  openai-trader-postgres-data:
+    external: true

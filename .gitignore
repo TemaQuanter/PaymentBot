@@ -6,3 +6,6 @@ venv/
 
 # Transaction samples.
 samples/
+
+# Some data that is generated while the program is running.
+data/

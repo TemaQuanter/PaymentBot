@@ -1,3 +1,4 @@
+from datetime import datetime
 from tronapi import Tron
 
 
@@ -8,11 +9,22 @@ def hex_to_base58(hex_str: str, tron: Tron):
 
 
 def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
+    """This function extracts transaction details from raw transaction data
+    It returns the following dictionary:
+
+        return {
+        'sender_address': sender_address,
+        'contract_address': contract_address,
+        'receiver_address': receiver_address,
+        'value': value,
+        'timestamp_utc': timestamp_utc
+    }"""
     # Extracting fields from JSON
     contract_info = transaction_json['raw_data']['contract'][0]['parameter']['value']
     owner_address_hex = contract_info['owner_address']
     contract_address_hex = contract_info['contract_address']
     data_hex = contract_info['data']
+    timestamp = transaction_json['raw_data']['timestamp']
 
     # Decode hex to base58 for addresses
     sender_address = hex_to_base58(owner_address_hex, tron)
@@ -27,9 +39,14 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
     value_hex = data_hex[72:]
     value = tron.fromSun(int(value_hex, 16))
 
+    # Convert timestamp to UTC
+    timestamp_utc = datetime.utcfromtimestamp(
+        timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
     return {
         'sender_address': sender_address,
         'contract_address': contract_address,
         'receiver_address': receiver_address,
-        'value': value
+        'value': value,
+        'timestamp_utc': timestamp_utc
     }
