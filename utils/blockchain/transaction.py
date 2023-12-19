@@ -40,13 +40,13 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
     value = tron.fromSun(int(value_hex, 16))
 
     # Convert timestamp to UTC
-    timestamp_utc = datetime.utcfromtimestamp(
-        timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+    # timestamp_utc = datetime.utcfromtimestamp(
+    #     timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
     return {
         'sender_address': sender_address,
         'contract_address': contract_address,
         'receiver_address': receiver_address,
         'value': value,
-        'timestamp_utc': timestamp_utc
+        'timestamp': timestamp
     }

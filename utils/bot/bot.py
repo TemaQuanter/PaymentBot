@@ -1,25 +1,22 @@
 # This file contains the logic of a telegram bot, that
 # accepts USDT payments in tron blockchain.
 
-from typing import List, Tuple, cast
-
 import os
 
 from tronapi import Tron
 
-from random import randint
+import psycopg2
 
 from string import punctuation
+from datetime import datetime, timedelta
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
-    InvalidCallbackData,
-    PicklePersistence,
     ConversationHandler,
     filters
 )
@@ -28,8 +25,11 @@ from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
 from .helper_functions import build_keyboard, send_message
-from ..blockchain.helper_functions import get_unique_amount_usdt
+from ..blockchain.helper_functions import get_unique_amount_usdt, verify_payment_validity
 from ..blockchain.transaction import extract_transaction_details
+
+from ..database.models.user import User
+from ..database.database import PostgresDB
 
 # Ignore some warnings related to conversation continuation
 # from various users in various chats.
@@ -41,6 +41,9 @@ START_ROUTES, BILLING_PLAN, VERIFY_PAYMENT, END_ROUTES = range(4)
 
 # Billing plans.
 BILLING_PLANS = ["$490/month", "$1300/quarter"]
+
+# Time limit for payment.
+PAYMENT_TIME_LIMIT_DELTA = timedelta(hours=1)
 
 
 def bot_poll(token: str) -> None:
@@ -157,6 +160,23 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Ge a unique ending for the amount to identify blockchain transaction.
     amount = get_unique_amount_usdt(amount)
 
+    # Insert a new user to the database.
+    user = User(update.effective_user.id)
+    db = PostgresDB()
+
+    try:
+        # Try to insert a user into the database.
+        db.insert_user(user)
+    except psycopg2.errors.UniqueViolation:
+        # The user already exists.
+        pass
+
+    # Set amount due and payment expiration timestamp.
+    user.amount_due = amount
+    user.payment_expiration_timestamp = datetime.utcnow() + PAYMENT_TIME_LIMIT_DELTA
+
+    db.set_amount_due_and_payment_expiration_timestamp(user)
+
     # Get payment address.
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
@@ -197,10 +217,26 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     transaction_details = extract_transaction_details(
         transaction_raw_data, tron)
 
-    print("Sender address:", transaction_details["sender_address"])
-    print("Contract address:", transaction_details["contract_address"])
-    print("Receiver address:", transaction_details["receiver_address"])
-    print("Value:", transaction_details["value"])
-    print("Timestamp UTC:", transaction_details["timestamp_utc"])
+    # Verify the validity of payment.
+    if verify_payment_validity(transaction_details, update.effective_user.id):
+        # Prolong the user subscription.
+
+        # Inform the user that the payment is successful.
+        await send_message("Payment is successful!\n"
+                           "Here is the link to the bot, you can start using it right now!", update, context)
+
+        # Send them the link to the trading bot.
+        await send_message("https://t.me/open_ai_trader_bot", update, context)
+
+        # Send a final message.
+        await send_message("To renew subscription later, use <code>/start</code>", update, context)
+    else:
+        # Inform the user that the transaction did not pass verification.
+        await send_message("The transaction did not pass verification.\n\n"
+                           "Please, try submitting transaction hash/id once again\n\n"
+                           "If you are sure, that you did submitted the right transaction hash"
+                           "you can contact support here\n\n@support", update, context)
+
+        return VERIFY_PAYMENT
 
     return ConversationHandler.END
