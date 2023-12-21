@@ -8,7 +8,7 @@ from tronapi import Tron
 import psycopg2
 
 from string import punctuation
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from telegram import Update
 from telegram.ext import (
@@ -168,20 +168,43 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Try to insert a user into the database.
         db.insert_user(user)
     except psycopg2.errors.UniqueViolation:
-        # The user already exists.
-        pass
+        # The user already exists, get the user.
+        user = db.get_user(update.effective_user.id)
 
-    # Set amount due and payment expiration timestamp.
-    user.amount_due = amount
-    user.payment_expiration_timestamp = datetime.utcnow() + PAYMENT_TIME_LIMIT_DELTA
+    # Flag that indicates whether or not it is necessary to generate a new invoice.
+    generate_new_invoice = False
 
-    db.set_amount_due_and_payment_expiration_timestamp(user)
+    # Check if there are both payment expiration timestamp and amount due set.
+    if user.amount_due != None and user.payment_expiration_timestamp != None:
+        # They are set.
+        # Check if the payment expiration timestamp expired.
+        if user.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcnow() or int(float(user.amount_due)) != int(float(amount)):
+            # The timestamp expired.
+            generate_new_invoice = True
+    else:
+        generate_new_invoice = True
+
+    # Check if it is necessary to generate a new invoice.
+    if generate_new_invoice:
+        # Set amount due and payment expiration timestamp.
+        user.amount_due = amount
+        user.payment_expiration_timestamp = datetime.utcnow() + PAYMENT_TIME_LIMIT_DELTA
+
+        db.set_amount_due_and_payment_expiration_timestamp(user)
 
     # Get payment address.
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
-    await send_message(f"You have <b>1 hour</b> max to make a payment.\n\n"
-                       f"Send <b>exactly</b> <code>{amount}</code> USDT to <code>{payment_address}</code> in Tron (TRX)\n\n"
+    # Get payment remaining time.
+    payment_remaining_time = (datetime.utcnow()
+                              - user.payment_expiration_timestamp.replace(tzinfo=None)).seconds
+
+    payment_remaining_hours = payment_remaining_time // 3600
+    payment_remaining_minutes = (payment_remaining_time % 3600) // 60
+    payment_remaining_time_seconds = payment_remaining_time % 60
+
+    await send_message("You have <b>1 hour</b> max to make a payment.\n\n".format(payment_remaining_hours, payment_remaining_minutes, payment_remaining_time_seconds) +
+                       f"Send <b>exactly</b> <code>{user.amount_due}</code> USDT to <code>{payment_address}</code> in Tron (TRX)\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
                        f"Send it without any extra symbols, letters or digits, just transaction hash/id", update, context)
 

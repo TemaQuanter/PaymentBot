@@ -1,9 +1,12 @@
 # This file contains a class that describes a database model
 # of a user.
 
+from datetime import datetime
+
+
 class User:
 
-    def __init__(self, telegram_id: int, subscription_expiration_timestamp: int = None, amount_due: int = None, payment_expiration_timestamp: int = None) -> None:
+    def __init__(self, telegram_id: int, subscription_expiration_timestamp: datetime = None, amount_due: int = None, payment_expiration_timestamp: datetime = None) -> None:
         self.telegram_id = telegram_id
         self.subscription_expiration_timestamp = subscription_expiration_timestamp
         self.amount_due = amount_due

@@ -5,7 +5,7 @@ import os
 
 from .models.user import User
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class PostgresDB:
@@ -71,7 +71,8 @@ class PostgresDB:
 
         # If it is None, then use the current time to calculate the expiration time.
         if user.subscription_expiration_timestamp == None:
-            user.subscription_expiration_timestamp = datetime.utcnow() + period
+            user.subscription_expiration_timestamp = datetime.now(
+                timezone.utc) + period
         else:
             # Otherwise - set a new expiration time based on the current subscription
             # expiration time.
