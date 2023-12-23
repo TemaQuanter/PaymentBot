@@ -17,14 +17,19 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
         'contract_address': contract_address,
         'receiver_address': receiver_address,
         'value': value,
-        'timestamp_utc': timestamp_utc
+        'timestamp': timestamp
     }"""
     # Extracting fields from JSON
-    contract_info = transaction_json['raw_data']['contract'][0]['parameter']['value']
-    owner_address_hex = contract_info['owner_address']
-    contract_address_hex = contract_info['contract_address']
-    data_hex = contract_info['data']
-    timestamp = transaction_json['raw_data']['timestamp']
+    try:
+        contract_info = transaction_json['raw_data']['contract'][0]['parameter']['value']
+        owner_address_hex = contract_info['owner_address']
+        contract_address_hex = contract_info['contract_address']
+        data_hex = contract_info['data']
+        # Division is necessary to convert milliseconds to seconds.
+        timestamp = float(transaction_json['raw_data']['timestamp']) / 1000
+    except KeyError:
+        # A transaction is most likely not a token transfer.
+        return None
 
     # Decode hex to base58 for addresses
     sender_address = hex_to_base58(owner_address_hex, tron)

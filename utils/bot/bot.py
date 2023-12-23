@@ -18,6 +18,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     ConversationHandler,
+    PicklePersistence,
     filters
 )
 
@@ -31,6 +32,10 @@ from ..blockchain.transaction import extract_transaction_details
 from ..database.models.user import User
 from ..database.database import PostgresDB
 
+from ..constants import PAYMENT_TIME_LIMIT_DELTA, SERVICE_ADDRESS
+
+import requests
+
 # Ignore some warnings related to conversation continuation
 # from various users in various chats.
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler",
@@ -42,14 +47,16 @@ START_ROUTES, BILLING_PLAN, VERIFY_PAYMENT, END_ROUTES = range(4)
 # Billing plans.
 BILLING_PLANS = ["$490/month", "$1300/quarter"]
 
-# Time limit for payment.
-PAYMENT_TIME_LIMIT_DELTA = timedelta(hours=1)
 
-
-def bot_poll(token: str) -> None:
+def get_bot(token: str) -> Application:
     """Run the bot."""
+
+    # Get a conversation persistence directory.
+    persistence = PicklePersistence(filepath="data/application_persistence")
+
     # Create the application
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(
+        token).persistence(persistence).build()
 
     # Setup conversation handler with the states FIRST and SECOND
     # Use the pattern parameter to pass CallbackQueries with specific
@@ -83,8 +90,7 @@ def bot_poll(token: str) -> None:
     # Add ConversationHandler to application that will be used for handling updates
     application.add_handler(conv_handler)
 
-    # Run the bot until the user presses Ctrl-C
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    return application
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -208,6 +214,9 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
                        f"Send it without any extra symbols, letters or digits, just transaction hash/id", update, context)
 
+    # Close database connection.
+    db.close_connection()
+
     # Verify payment
     return VERIFY_PAYMENT
 
@@ -240,9 +249,22 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     transaction_details = extract_transaction_details(
         transaction_raw_data, tron)
 
+    # Check if it was possible to extract the data from the transaction.
+    if transaction_details == None:
+        # It is most likely that that transaction is not a token transfer.
+        await send_message("The transaction does not seem to me to be a token transfer...\n"
+                           "Please, make sure that you submitted the right transaction hash/id", update, context)
+
+        return VERIFY_PAYMENT
+
+    # Get a verdict on the provided transaction.
+    verification_verdict = verify_payment_validity(
+        transaction_details, update.effective_user.id)
+
     # Verify the validity of payment.
-    if verify_payment_validity(transaction_details, update.effective_user.id):
+    if verification_verdict[0]:
         # Prolong the user subscription.
+        requests.put(f"{SERVICE_ADDRESS}/approve/{update.effective_user.id}")
 
         # Inform the user that the payment is successful.
         await send_message("Payment is successful!\n"
@@ -259,6 +281,8 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                            "Please, try submitting transaction hash/id once again\n\n"
                            "If you are sure, that you did submitted the right transaction hash"
                            "you can contact support here\n\n@support", update, context)
+
+        await send_message(f"Error message: {verification_verdict[1]}", update, context)
 
         return VERIFY_PAYMENT
 

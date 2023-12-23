@@ -1,8 +1,10 @@
 {
   "cSpell.words": [
     "dotenv",
+    "notificator",
     "ntplib",
     "psycopg",
+    "SMARTCONTRACT",
     "tronapi"
 ]
 }

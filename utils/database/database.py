@@ -12,24 +12,24 @@ class PostgresDB:
 
     def __init__(self) -> None:
         # Get a database connection.
-        self.conn = psycopg2.connect(database=os.getenv("POSTGRES_DB"),
-                                     user=os.getenv("POSTGRES_USER"),
-                                     password=os.getenv("POSTGRES_PASSWORD"),
-                                     host=os.getenv("POSTGRES_HOST"),
-                                     port=os.getenv("POSTGRES_PORT"))
+        self.__conn = psycopg2.connect(database=os.getenv("POSTGRES_DB"),
+                                       user=os.getenv("POSTGRES_USER"),
+                                       password=os.getenv("POSTGRES_PASSWORD"),
+                                       host=os.getenv("POSTGRES_HOST"),
+                                       port=os.getenv("POSTGRES_PORT"))
 
-        # Create a cursor.
-        self.cursor = self.conn.cursor()
+        # Create a __cursor.
+        self.__cursor = self.__conn.cursor()
 
     def get_user(self, telegram_id: int) -> User:
         """Return a user from the database."""
 
         # Execute the command.
-        self.cursor.execute(
+        self.__cursor.execute(
             f"SELECT * FROM users WHERE telegram_id = {telegram_id}")
 
         # Get data.
-        rows = self.cursor.fetchall()
+        rows = self.__cursor.fetchall()
 
         # Create a user instance with the data extracted from the database.
         user = User(telegram_id)
@@ -43,22 +43,22 @@ class PostgresDB:
         """Insert a new user into the database."""
 
         try:
-            self.cursor.execute(
+            self.__cursor.execute(
                 "INSERT INTO users (telegram_id) VALUES (%s);", (user.telegram_id,))
-            self.conn.commit()
+            self.__conn.commit()
         except psycopg2.DatabaseError as e:
-            self.conn.rollback()
+            self.__conn.rollback()
             raise e
 
     def set_amount_due_and_payment_expiration_timestamp(self, user: User):
         """Update amount due and payment expiration timestamp."""
 
         try:
-            self.cursor.execute(
+            self.__cursor.execute(
                 "UPDATE users SET amount_due = %s, payment_expiration_timestamp = %s WHERE telegram_id = %s;", (user.amount_due, user.payment_expiration_timestamp, user.telegram_id))
-            self.conn.commit()
+            self.__conn.commit()
         except psycopg2.DatabaseError as e:
-            self.conn.rollback()
+            self.__conn.rollback()
             raise e
 
     def prolong_subscription(self, user: User, period: timedelta):
@@ -80,11 +80,11 @@ class PostgresDB:
 
         # Save a new subscription expiration time to the database.
         try:
-            self.cursor.execute(
+            self.__cursor.execute(
                 "UPDATE users SET subscription_expiration_timestamp = %s WHERE telegram_id = %s;", (user.subscription_expiration_timestamp, user.telegram_id))
-            self.conn.commit()
+            self.__conn.commit()
         except psycopg2.DatabaseError as e:
-            self.conn.rollback()
+            self.__conn.rollback()
             raise e
 
     def insert_validated_transaction(self, transaction_id: str, transaction_timestamp: datetime) -> bool:
@@ -92,14 +92,20 @@ class PostgresDB:
         If the transaction already exists, the function returns False, true - otherwise."""
 
         try:
-            self.cursor.execute("INSERT INTO validated_transactions (transaction_id, transaction_timestamp) VALUES (%s, %s)", (
+            self.__cursor.execute("INSERT INTO validated_transactions (transaction_id, transaction_timestamp) VALUES (%s, %s)", (
                 transaction_id, transaction_timestamp))
-            self.conn.commit()
+            self.__conn.commit()
 
             return True
         except psycopg2.errors.UniqueViolation:
-            self.conn.rollback()
+            self.__conn.rollback()
             return False
         except psycopg2.DatabaseError as e:
-            self.conn.rollback()
+            self.__conn.rollback()
             raise e
+
+    def close_connection(self):
+        """This function closes the connection to the database."""
+
+        self.__cursor.close()
+        self.__conn.close()
