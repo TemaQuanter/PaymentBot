@@ -13,18 +13,21 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
     It returns the following dictionary:
 
         return {
+        'transaction_id': transaction_id,
         'sender_address': sender_address,
         'contract_address': contract_address,
         'receiver_address': receiver_address,
         'value': value,
         'timestamp': timestamp
     }"""
+
     # Extracting fields from JSON
     try:
         contract_info = transaction_json['raw_data']['contract'][0]['parameter']['value']
         owner_address_hex = contract_info['owner_address']
         contract_address_hex = contract_info['contract_address']
         data_hex = contract_info['data']
+        transaction_id = transaction_json['txID']
         # Division is necessary to convert milliseconds to seconds.
         timestamp = float(transaction_json['raw_data']['timestamp']) / 1000
     except KeyError:
@@ -49,6 +52,7 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
     #     timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
     return {
+        'transaction_id': transaction_id,
         'sender_address': sender_address,
         'contract_address': contract_address,
         'receiver_address': receiver_address,

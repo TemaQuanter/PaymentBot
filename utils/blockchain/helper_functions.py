@@ -8,6 +8,7 @@ import ntplib
 from datetime import datetime, timezone
 
 import os
+import psycopg2
 
 from ..constants import PAYMENT_TIME_LIMIT_DELTA
 
@@ -27,7 +28,7 @@ def get_unique_amount_usdt(amount: str) -> str:
     the transaction."""
 
     # 4-digit ending to identify the transaction.
-    unique_ending = ".00"
+    unique_ending = "."
 
     # Get 4-digit ending to identify the transaction.
     for _ in range(4):
@@ -46,20 +47,24 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
     # Get a connection to database.
     db = PostgresDB()
 
-    # Get a user from the database.
-    user = db.get_user(telegram_id)
+    try:
+        # Get user invoice
+        invoice = db.get_invoice(telegram_id)
+    except psycopg2.DatabaseError as e:
+        db.close_connection()
+        return (False, "Internal server error")
 
     # Check if the amount in transaction is the same as requested.
-    # if user.amount_due != transaction_details["value"]:
-    #     return_message = (False, "Incorrect value")
+    if invoice.amount_due != transaction_details["value"]:
+        return_message = (False, "Incorrect value")
 
     # Check if the transaction was made on time.
-    if user.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcfromtimestamp(transaction_details['timestamp']):
+    if invoice.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcfromtimestamp(transaction_details['timestamp']):
         return_message = (False, "Timestamp expired")
 
     # Check if the transactions is not an old transaction.
     # The the payment was not made before the request.
-    if user.payment_expiration_timestamp.replace(tzinfo=None) - PAYMENT_TIME_LIMIT_DELTA > datetime.utcfromtimestamp(transaction_details['timestamp']):
+    if invoice.payment_expiration_timestamp.replace(tzinfo=None) - PAYMENT_TIME_LIMIT_DELTA > datetime.utcfromtimestamp(transaction_details['timestamp']):
         return_message = (False, "Timestamp too old")
 
     # Check that the smart-contract is the required one.
@@ -69,6 +74,16 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
     # Check the the receiver address is the required one.
     if transaction_details["receiver_address"] != os.getenv("TRON_WALLET_ADDRESS"):
         return_message = (False, "Wrong recipient")
+
+    # Try to insert transaction into used transactions.
+    try:
+        if not db.insert_validated_transaction(
+                transaction_details["transaction_id"], datetime.utcfromtimestamp(transaction_details['timestamp'])):
+            # The transaction is already registered.
+            return_message = (False, "This transaction has been already used")
+
+    except psycopg2.DatabaseError as e:
+        return_message = (False, "Internal server error")
 
     # Close database connection.
     db.close_connection()

@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  trading-bot:
+  payment-bot:
     build:
       context: .
       dockerfile: docker/bot.dockerfile
@@ -26,8 +26,8 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - openai-trader-postgres-data:/var/lib/postgresql/data
+      - payment-bot-postgres-data:/var/lib/postgresql/data
 
 volumes:
-  openai-trader-postgres-data:
+  payment-bot-postgres-data:
     external: true

@@ -83,6 +83,8 @@ def get_bot(token: str) -> Application:
             # ],
         },
         fallbacks=[CommandHandler("start", start)],
+        name="payment",
+        persistent=True
     )
 
     # Add ConversationHandler to application that will be used for handling updates
@@ -124,6 +126,13 @@ async def agree(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     # Get database connection.
     db = PostgresDB()
+
+    # Add the user to the database, if they agree.
+    try:
+        db.insert_user(User(update.effective_user.id))
+    except psycopg2.errors.UniqueViolation:
+        # If the user already exists, pass.
+        pass
 
     # Create billing plans for a user.
     billing_plans = [
@@ -267,14 +276,30 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Establish database connection.
         db = PostgresDB()
 
+        # Get user invoice.
+        invoice = db.get_invoice(update.effective_user.id)
+
         # Prolong user subscription.
-        db.prolong_subscription(User(update.effective_user.id), )
+        db.prolong_subscription(
+            User(invoice.telegram_user_id), timedelta(days=invoice.days_valid))
+
+        # Get new expiration timestamp.
+        user = db.get_user(invoice.telegram_user_id)
+
+        # Remove invoice.
+        db.remove_invoice(invoice.telegram_user_id)
 
         # Close database connection.
         db.close_connection()
 
+        # Calculate access till date.
+
+        # Format the datetime object into the desired string format 'DD/MM/YYYY'
+        formatted_date = user.subscription_expiration_timestamp.strftime(
+            '%d/%m/%Y')
+
         # Prolong the user subscription.
-        # requests.put(f"{SERVICE_ADDRESS}/approve/{update.effective_user.id}")
+        requests.put(f"{SERVICE_ADDRESS}/approve/{update.effective_user.id}")
 
         # Inform the user that the payment is successful.
         await send_message("Payment is successful!\n"
@@ -284,7 +309,7 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await send_message("https://t.me/open_ai_trader_bot", update, context)
 
         # Inform them about the expiration timestamp.
-        # await send_message(f"Access till <b>{} UTC</b>")
+        await send_message(f"Access till <b>{formatted_date} UTC</b>", update, context)
 
         # Send a final message.
         await send_message("To renew subscription later, use <code>/start</code>", update, context)

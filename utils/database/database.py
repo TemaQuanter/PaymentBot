@@ -11,6 +11,8 @@ from .models.validated_transactions import Transaction
 from datetime import datetime, timedelta, timezone
 from typing import List
 
+from ..constants import TRANSACTION_EXPIRATION_TIMESTAMP
+
 
 class PostgresDB:
 
@@ -210,6 +212,17 @@ class PostgresDB:
         except psycopg2.errors.UniqueViolation:
             self.__conn.rollback()
             return False
+        except psycopg2.DatabaseError as e:
+            self.__conn.rollback()
+            raise e
+
+    def remove_old_validated_transactions(self) -> None:
+        """This function removes transactions that are old enough not to be used again."""
+
+        try:
+            self.__cursor.execute(
+                "DELETE FROM validated_transactions WHERE transaction_timestamp < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '%s seconds'", (TRANSACTION_EXPIRATION_TIMESTAMP.seconds,))
+            self.__conn.commit()
         except psycopg2.DatabaseError as e:
             self.__conn.rollback()
             raise e
