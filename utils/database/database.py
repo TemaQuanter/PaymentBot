@@ -3,9 +3,13 @@
 import psycopg2
 import os
 
+from .models.subscription_plans import SubscriptionPlan
+from .models.invoice import Invoice
 from .models.user import User
+from .models.validated_transactions import Transaction
 
 from datetime import datetime, timedelta, timezone
+from typing import List
 
 
 class PostgresDB:
@@ -21,21 +25,73 @@ class PostgresDB:
         # Create a __cursor.
         self.__cursor = self.__conn.cursor()
 
+    def get_expired_users(self) -> List[User]:
+        """This function returns all users from the database, whose subscription
+        has expired."""
+
+        # Execute the command.
+        self.__cursor.execute(
+            "SELECT * FROM users WHERE subscription_expiration_timestamp < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');")
+
+        # Get data.
+        rows = self.__cursor.fetchall()
+
+        # List of expired users.
+        expired_users = list()
+
+        # Traverse each row of the database reply and
+        # collect all users with expired subscription.
+        for row in rows:
+            user = User(row[0])
+            user.subscription_expiration_timestamp = row[1]
+
+            expired_users.append(user)
+
+        # Return users with expired subscriptions.
+        return expired_users
+
+    def get_users(self) -> List[User]:
+        """This function returns all users from the database."""
+
+        # Execute the command.
+        self.__cursor.execute(
+            "SELECT * FROM users;")
+
+        # Get data.
+        rows = self.__cursor.fetchall()
+
+        # List of expired users.
+        users = list()
+
+        # Traverse each row of the database reply and
+        # collect all users.
+        for row in rows:
+            user = User(row[0])
+            user.subscription_expiration_timestamp = row[1]
+
+            users.append(user)
+
+        # Return users.
+        return users
+
     def get_user(self, telegram_id: int) -> User:
         """Return a user from the database."""
 
         # Execute the command.
         self.__cursor.execute(
-            f"SELECT * FROM users WHERE telegram_id = {telegram_id}")
+            "SELECT * FROM users WHERE telegram_id = %s;", (telegram_id,))
 
         # Get data.
         rows = self.__cursor.fetchall()
 
+        # Check if there is data found.
+        if len(rows) == 0:
+            # Nothing was found.
+            raise psycopg2.errors.NoDataFound
+
         # Create a user instance with the data extracted from the database.
         user = User(telegram_id)
         user.subscription_expiration_timestamp = rows[0][1]
-        user.amount_due = rows[0][2]
-        user.payment_expiration_timestamp = rows[0][3]
 
         return user
 
@@ -50,16 +106,70 @@ class PostgresDB:
             self.__conn.rollback()
             raise e
 
-    def set_amount_due_and_payment_expiration_timestamp(self, user: User):
-        """Update amount due and payment expiration timestamp."""
+    def insert_invoice(self, invoice: Invoice) -> None:
+        """This function assigns an invoice to the user."""
 
         try:
             self.__cursor.execute(
-                "UPDATE users SET amount_due = %s, payment_expiration_timestamp = %s WHERE telegram_id = %s;", (user.amount_due, user.payment_expiration_timestamp, user.telegram_id))
+                "INSERT INTO invoice VALUES (%s, %s, %s, %s);", (invoice.telegram_user_id, invoice.amount_due, invoice.days_valid, invoice.payment_expiration_timestamp))
             self.__conn.commit()
         except psycopg2.DatabaseError as e:
             self.__conn.rollback()
             raise e
+
+    def get_invoice(self, telegram_user_id) -> Invoice:
+        """This function retrieves current invoice for the user
+        from the database."""
+
+        # Execute the command.
+        self.__cursor.execute(
+            "SELECT * FROM invoice WHERE telegram_user_id = %s;", (telegram_user_id,))
+
+        # Get data.
+        rows = self.__cursor.fetchall()
+
+        # Check if there is data found.
+        if len(rows) == 0:
+            # Nothing was found.
+            raise psycopg2.errors.NoDataFound
+
+        # Create invoice form raw data.
+        invoice = Invoice(rows[0][0], rows[0][1], rows[0][2], rows[0][3])
+
+        return invoice
+
+    def remove_invoice(self, telegram_user_id: int) -> None:
+        """This function removes invoice from the database."""
+
+        try:
+            self.__cursor.execute(
+                "DELETE FROM invoice WHERE telegram_user_id = %s;", (telegram_user_id,))
+            self.__conn.commit()
+        except psycopg2.DatabaseError as e:
+            self.__conn.rollback()
+            raise e
+
+    def get_subscription_plans(self) -> List[SubscriptionPlan]:
+        """This function returns subscription plans."""
+
+        # Execute the command.
+        self.__cursor.execute(
+            "SELECT * FROM subscription_plans;")
+
+        # Get data.
+        rows = self.__cursor.fetchall()
+
+        # List of expired users.
+        subscription_plans = list()
+
+        # Traverse each row of the database reply and
+        # collect all users.
+        for row in rows:
+            subscription_plan = SubscriptionPlan(int(row[1]), row[2])
+            subscription_plans.append(subscription_plan)
+
+        # Return users.
+        return subscription_plans
 
     def prolong_subscription(self, user: User, period: timedelta):
         """Update subscription expiration timestamp."""

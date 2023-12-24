@@ -7,7 +7,7 @@ from tronapi import Tron
 
 import psycopg2
 
-from string import punctuation
+from string import punctuation, whitespace, ascii_letters
 from datetime import datetime, timedelta, timezone
 
 from telegram import Update
@@ -31,6 +31,7 @@ from ..blockchain.transaction import extract_transaction_details
 
 from ..database.models.user import User
 from ..database.database import PostgresDB
+from ..database.models.invoice import Invoice
 
 from ..constants import PAYMENT_TIME_LIMIT_DELTA, SERVICE_ADDRESS
 
@@ -43,9 +44,6 @@ filterwarnings(action="ignore", message=r".*CallbackQueryHandler",
 
 # Constants to navigate a conversation.
 START_ROUTES, BILLING_PLAN, VERIFY_PAYMENT, END_ROUTES = range(4)
-
-# Billing plans.
-BILLING_PLANS = ["$490/month", "$1300/quarter"]
 
 
 def get_bot(token: str) -> Application:
@@ -124,8 +122,18 @@ async def agree(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     await send_message("Cool! Let's go!", update, context)
 
+    # Get database connection.
+    db = PostgresDB()
+
+    # Create billing plans for a user.
+    billing_plans = [
+        f"${int(float(sub_plan.amount_due))} / {sub_plan.days_valid} days" for sub_plan in db.get_subscription_plans()]
+
+    # Close database connection.
+    db.close_connection()
+
     # Send a message suggesting various billing plans.
-    await send_message("Choose one of the following billing plans:", update, context, reply_markup=build_keyboard(BILLING_PLANS))
+    await send_message("Choose one of the following billing plans:", update, context, reply_markup=build_keyboard(billing_plans))
 
     # Proceed to choosing a billing plan.
     return BILLING_PLAN
@@ -161,56 +169,49 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     amount, period = query.data.split('/')
 
     # Clear amount from any symbols.
-    amount = amount.strip(punctuation)
+    amount = amount.strip(punctuation + whitespace)
 
     # Ge a unique ending for the amount to identify blockchain transaction.
     amount = get_unique_amount_usdt(amount)
 
-    # Insert a new user to the database.
-    user = User(update.effective_user.id)
-    db = PostgresDB()
+    # Clear period from symbols.
+    period = period.strip(punctuation + whitespace + ascii_letters)
 
-    try:
-        # Try to insert a user into the database.
-        db.insert_user(user)
-    except psycopg2.errors.UniqueViolation:
-        # The user already exists, get the user.
-        user = db.get_user(update.effective_user.id)
+    # Establish database connection.
+    db = PostgresDB()
 
     # Flag that indicates whether or not it is necessary to generate a new invoice.
     generate_new_invoice = False
 
-    # Check if there are both payment expiration timestamp and amount due set.
-    if user.amount_due != None and user.payment_expiration_timestamp != None:
-        # They are set.
+    # Try to get current invoice for the user.
+    try:
+        invoice = db.get_invoice(update.effective_user.id)
+
         # Check if the payment expiration timestamp expired.
-        if user.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcnow() or int(float(user.amount_due)) != int(float(amount)):
+        if invoice.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcnow() or int(float(invoice.amount_due)) != int(float(amount)):
             # The timestamp expired.
             generate_new_invoice = True
-    else:
+
+            # Remove the invoice.
+            db.remove_invoice(invoice.telegram_user_id)
+    except psycopg2.errors.NoDataFound:
+        # No invoice assigned to the user.
         generate_new_invoice = True
 
     # Check if it is necessary to generate a new invoice.
     if generate_new_invoice:
-        # Set amount due and payment expiration timestamp.
-        user.amount_due = amount
-        user.payment_expiration_timestamp = datetime.utcnow() + PAYMENT_TIME_LIMIT_DELTA
+        # Create a new invoice.
+        invoice = Invoice(update.effective_user.id, amount,
+                          period, datetime.utcnow() + PAYMENT_TIME_LIMIT_DELTA)
 
-        db.set_amount_due_and_payment_expiration_timestamp(user)
+        # Insert the invoice to the database.
+        db.insert_invoice(invoice)
 
     # Get payment address.
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
-    # Get payment remaining time.
-    payment_remaining_time = (datetime.utcnow()
-                              - user.payment_expiration_timestamp.replace(tzinfo=None)).seconds
-
-    payment_remaining_hours = payment_remaining_time // 3600
-    payment_remaining_minutes = (payment_remaining_time % 3600) // 60
-    payment_remaining_time_seconds = payment_remaining_time % 60
-
-    await send_message("You have <b>1 hour</b> max to make a payment.\n\n".format(payment_remaining_hours, payment_remaining_minutes, payment_remaining_time_seconds) +
-                       f"Send <b>exactly</b> <code>{user.amount_due}</code> USDT to <code>{payment_address}</code> in Tron (TRX)\n\n"
+    await send_message("You have <b>1 hour</b> max to make a payment.\n\n" +
+                       f"Send <b>exactly</b> <code>{invoice.amount_due}</code> USDT to <code>{payment_address}</code> in Tron (TRX)\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
                        f"Send it without any extra symbols, letters or digits, just transaction hash/id", update, context)
 
@@ -263,8 +264,17 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Verify the validity of payment.
     if verification_verdict[0]:
+        # Establish database connection.
+        db = PostgresDB()
+
+        # Prolong user subscription.
+        db.prolong_subscription(User(update.effective_user.id), )
+
+        # Close database connection.
+        db.close_connection()
+
         # Prolong the user subscription.
-        requests.put(f"{SERVICE_ADDRESS}/approve/{update.effective_user.id}")
+        # requests.put(f"{SERVICE_ADDRESS}/approve/{update.effective_user.id}")
 
         # Inform the user that the payment is successful.
         await send_message("Payment is successful!\n"
@@ -272,6 +282,9 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         # Send them the link to the trading bot.
         await send_message("https://t.me/open_ai_trader_bot", update, context)
+
+        # Inform them about the expiration timestamp.
+        # await send_message(f"Access till <b>{} UTC</b>")
 
         # Send a final message.
         await send_message("To renew subscription later, use <code>/start</code>", update, context)
