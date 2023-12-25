@@ -21,6 +21,8 @@ cd PaymentBot_copy
 # Remove unnecessary files from the project.
 rm -rf .vscode
 rm -rf .git
+rm -rf venv
+rm -rf samples
 
 # Get out of the directory.
 cd ..

@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import os
+
 # Time limit for payment.
 PAYMENT_TIME_LIMIT_DELTA = timedelta(hours=1)
 
@@ -7,4 +9,4 @@ PAYMENT_TIME_LIMIT_DELTA = timedelta(hours=1)
 TRANSACTION_EXPIRATION_TIMESTAMP = timedelta(hours=2)
 
 # Service address.
-SERVICE_ADDRESS = "http://127.0.0.1:8080"
+SERVICE_ADDRESS = os.getenv("SERVICE_ADDRESS")

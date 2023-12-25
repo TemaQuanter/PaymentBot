@@ -1,4 +1,4 @@
-version: "3"
+version: "3.8"
 
 services:
   payment-bot:
@@ -9,11 +9,12 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      - postgres
-    ports:
-      - 8080:8080
+      - postgres-payment-bot
+    networks:
+      - trading-bot-network
+      - internal-network
 
-  postgres:
+  postgres-payment-bot:
     build:
       context: .
       dockerfile: docker/postgresql.dockerfile
@@ -27,7 +28,14 @@ services:
       retries: 5
     volumes:
       - payment-bot-postgres-data:/var/lib/postgresql/data
+    networks:
+      - internal-network
 
 volumes:
   payment-bot-postgres-data:
     external: true
+
+networks:
+  trading-bot-network:
+    external: true
+  internal-network:
