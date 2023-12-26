@@ -33,7 +33,7 @@ from ..database.models.user import User
 from ..database.database import PostgresDB
 from ..database.models.invoice import Invoice
 
-from ..constants import PAYMENT_TIME_LIMIT_DELTA, SERVICE_ADDRESS
+from ..constants import PAYMENT_TIME_LIMIT_DELTA, POLICY_PATH, SERVICE_ADDRESS, SERVICE_URL, SUPPORT_CREDENTIALS
 
 import requests
 
@@ -101,10 +101,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     keyboard_options = ["Agree", "Decline"]
 
+    # Load policy from a file.
+    with open(POLICY_PATH, "r") as fl:
+        policy_text = fl.read()
+
     await update.message.reply_html(
-        f"Hi {user.first_name}!\n"
-        "Here is our policy\n"
-        "bla-bla-bla\n"
+        f"Hi {user.first_name}! Before we continue, please, read our policy\n"
+        "Here is our policy👇👇👇\n\n"
+        f"{policy_text}\n\n"
         "By agreeing with the policy you confirm,\n"
         "that you accept the conditions written above",
         reply_markup=build_keyboard(keyboard_options)
@@ -302,11 +306,11 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         requests.put(f"{SERVICE_ADDRESS}/approve/{update.effective_user.id}")
 
         # Inform the user that the payment is successful.
-        await send_message("Payment is successful!\n"
+        await send_message("Payment is successful! Welcome aboard 🥳\n"
                            "Here is the link to the bot, you can start using it right now!", update, context)
 
         # Send them the link to the trading bot.
-        await send_message("https://t.me/open_ai_trader_bot", update, context)
+        await send_message(SERVICE_URL, update, context)
 
         # Inform them about the expiration timestamp.
         await send_message(f"Access till <b>{formatted_date} UTC</b>", update, context)
@@ -317,8 +321,8 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Inform the user that the transaction did not pass verification.
         await send_message("The transaction did not pass verification.\n\n"
                            "Please, try submitting transaction hash/id once again\n\n"
-                           "If you are sure, that you did submitted the right transaction hash"
-                           "you can contact support here\n\n@support", update, context)
+                           "If you are sure, that you did submitted the right transaction hash "
+                           f"you can contact support here\n\n{SUPPORT_CREDENTIALS}", update, context)
 
         await send_message(f"Error message: {verification_verdict[1]}", update, context)
 

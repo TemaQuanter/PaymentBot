@@ -27,13 +27,13 @@ class PostgresDB:
         # Create a __cursor.
         self.__cursor = self.__conn.cursor()
 
-    def get_expired_users(self) -> List[User]:
+    def get_expired_not_informed_users(self) -> List[User]:
         """This function returns all users from the database, whose subscription
-        has expired."""
+        has expired and they have not been informed about it."""
 
         # Execute the command.
         self.__cursor.execute(
-            "SELECT * FROM users WHERE subscription_expiration_timestamp < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');")
+            "SELECT * FROM users WHERE subscription_expiration_timestamp < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AND informed_about_expiration = FALSE;")
 
         # Get data.
         rows = self.__cursor.fetchall()
@@ -51,6 +51,44 @@ class PostgresDB:
 
         # Return users with expired subscriptions.
         return expired_users
+
+    def mark_as_informed(self, users: List[User]):
+        """This function marks users as informed that their subscription expired."""
+
+        # Traverse each user and mark them as informed about expired subscription.
+        for user in users:
+            try:
+                self.__cursor.execute(
+                    "UPDATE users SET informed_about_expiration = TRUE WHERE telegram_id = %s;", (user.telegram_id,))
+                self.__conn.commit()
+            except psycopg2.DatabaseError as e:
+                self.__conn.rollback()
+                raise e
+
+    def get_next_to_expire_users(self, before_time: timedelta) -> List[User]:
+        """This function returns all users from the database, whose subscription
+        will expire is less than "before_time"."""
+
+        # Execute the command.
+        self.__cursor.execute(
+            "SELECT * FROM users WHERE subscription_expiration_timestamp < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '%s days' AND subscription_expiration_timestamp > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');", (before_time.days,))
+
+        # Get data.
+        rows = self.__cursor.fetchall()
+
+        # List of expired users.
+        next_to_expire_users = list()
+
+        # Traverse each row of the database reply and
+        # collect all users with expired subscription.
+        for row in rows:
+            user = User(row[0])
+            user.subscription_expiration_timestamp = row[1]
+
+            next_to_expire_users.append(user)
+
+        # Return users with expired subscriptions.
+        return next_to_expire_users
 
     def get_users(self) -> List[User]:
         """This function returns all users from the database."""
@@ -102,7 +140,7 @@ class PostgresDB:
 
         try:
             self.__cursor.execute(
-                "INSERT INTO users (telegram_id) VALUES (%s);", (user.telegram_id,))
+                "INSERT INTO users (telegram_id, informed_about_expiration) VALUES (%s, FALSE);", (user.telegram_id,))
             self.__conn.commit()
         except psycopg2.DatabaseError as e:
             self.__conn.rollback()
@@ -190,10 +228,13 @@ class PostgresDB:
             # expiration time.
             user.subscription_expiration_timestamp += period
 
+        # Reset "user is informed about expired subscription" to false.
+        user.informed_about_expiration = False
+
         # Save a new subscription expiration time to the database.
         try:
             self.__cursor.execute(
-                "UPDATE users SET subscription_expiration_timestamp = %s WHERE telegram_id = %s;", (user.subscription_expiration_timestamp, user.telegram_id))
+                "UPDATE users SET subscription_expiration_timestamp = %s, informed_about_expiration = %s WHERE telegram_id = %s;", (user.subscription_expiration_timestamp, user.informed_about_expiration, user.telegram_id))
             self.__conn.commit()
         except psycopg2.DatabaseError as e:
             self.__conn.rollback()

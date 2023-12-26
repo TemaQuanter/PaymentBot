@@ -2,6 +2,7 @@
 
 # Import modules.
 from dotenv import load_dotenv
+
 import os
 
 from utils.bot.bot import get_bot

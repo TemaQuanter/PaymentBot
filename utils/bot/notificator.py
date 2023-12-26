@@ -15,10 +15,12 @@ import requests
 
 from asyncio import AbstractEventLoop
 
-INTERVAL_DELAY_SECS = 30
+# How frequently to perform the checks.
+INTERVAL_DELAY_SECS = 24 * 60 * 60
 
-# The deadline, when the user has to be notified that their subscription got expired.
-NOTIFICATION_SPAN = timedelta(seconds=33)
+# Inform the users that their subscription will expire soon, when it expires
+# in less than this time.
+BEFORE_TIME = timedelta(days=3)
 
 
 def notify(application: Application, loop: AbstractEventLoop) -> None:
@@ -35,26 +37,42 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
         db.remove_old_validated_transactions()
 
         # Get all users with expired subscriptions from the database.
-        expired_users = db.get_expired_users()
+        expired_users = db.get_expired_not_informed_users()
 
         # Switch off the bot access for each user whose subscription got expired.
         for expired_user in expired_users:
             # Change the status of a user to expired.
             requests.put(
                 f"{SERVICE_ADDRESS}/expired/{expired_user.telegram_id}")
-            pass
 
         # Inform all users whose subscription got expired.
         for expired_user in expired_users:
-            # Check if the user has been already notified.
-            if expired_user.subscription_expiration_timestamp.replace(tzinfo=None) + NOTIFICATION_SPAN > datetime.utcnow():
-                # Schedule the coroutine to be run on the event loop
-                asyncio.run_coroutine_threadsafe(
-                    application.bot.send_message(
-                        chat_id=expired_user.telegram_id, text="Your subscription got expired, to renew it, please use <code>/start</code> command.\n"
-                        "Your access to the bot is currently restricted and it will not manage your assets from now on until you renew the subscription.", parse_mode="HTML"),
-                    loop
-                )
+            # Schedule the coroutine to be run on the event loop
+            asyncio.run_coroutine_threadsafe(
+                application.bot.send_message(
+                    chat_id=expired_user.telegram_id, text="Your subscription got expired, to renew it, please use <code>/start</code> command.\n\n"
+                    "Your access to the bot is currently restricted and it will not manage your assets from now on until you renew the subscription.", parse_mode="HTML"),
+                loop
+            )
+
+        # Mark all users as informed that their subscription got expired.
+        db.mark_as_informed(expired_users)
+
+        # Get users, whose subscriptions are close to expiration.
+        next_to_expire_users = db.get_next_to_expire_users(BEFORE_TIME)
+
+        # Inform all users whose subscription will expire soon.
+        for next_to_expire_user in next_to_expire_users:
+            # Format the datetime object into the desired string format 'DD/MM/YYYY'
+            formatted_date = next_to_expire_user.subscription_expiration_timestamp.strftime(
+                '%d/%m/%Y')
+
+            # Schedule the coroutine to be run on the event loop
+            asyncio.run_coroutine_threadsafe(
+                application.bot.send_message(
+                    chat_id=next_to_expire_user.telegram_id, text=f"Your subscription will expire on <b>{formatted_date} UTC</b>, to renew it, please use <code>/start</code> command.\n\n", parse_mode="HTML"),
+                loop
+            )
 
         # Disconnect from the database.
         db.close_connection()

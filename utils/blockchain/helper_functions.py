@@ -7,8 +7,12 @@ from ..database.models.user import User
 import ntplib
 from datetime import datetime, timezone
 
+from tronapi import Tron
+
 import os
 import psycopg2
+
+import time
 
 from ..constants import PAYMENT_TIME_LIMIT_DELTA
 
@@ -41,8 +45,30 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
     """This function verifies the payment validity.
     If the payment is valid, the function returns True, False - otherwise."""
 
+    # Establish connection with Tron blockchain.
+    tron = Tron()
+
     # Return message.
     return_message = (True, "OK")
+
+    # Wait for the block to become confirmed.
+    while True:
+        try:
+            # Query transaction info.
+            transaction_info = tron.trx.get_transaction_info(
+                transaction_details["transaction_id"])
+
+            # Check if the block is confirmed.
+            if "id" in transaction_info.keys():
+                # Get out of the loop.
+                break
+        except ValueError:
+            return (False, "Transaction not found")
+        except:
+            return (False, "Internal server error")
+
+        # Wait for some time before performing the check again.
+        time.sleep(3)
 
     # Get a connection to database.
     db = PostgresDB()
@@ -53,6 +79,10 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
     except psycopg2.DatabaseError as e:
         db.close_connection()
         return (False, "Internal server error")
+
+    # Check if transaction status is success.
+    if transaction_details["status"] != "SUCCESS":
+        return_message = (False, "Transaction failed")
 
     # Check if the amount in transaction is the same as requested.
     if invoice.amount_due != transaction_details["value"]:

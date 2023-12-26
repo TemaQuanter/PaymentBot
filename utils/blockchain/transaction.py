@@ -13,6 +13,7 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
     It returns the following dictionary:
 
         return {
+        'status': status
         'transaction_id': transaction_id,
         'sender_address': sender_address,
         'contract_address': contract_address,
@@ -23,6 +24,7 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
 
     # Extracting fields from JSON
     try:
+        status = transaction_json['ret'][0]['contractRet']
         contract_info = transaction_json['raw_data']['contract'][0]['parameter']['value']
         owner_address_hex = contract_info['owner_address']
         contract_address_hex = contract_info['contract_address']
@@ -52,6 +54,7 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
     #     timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
     return {
+        'status': status,
         'transaction_id': transaction_id,
         'sender_address': sender_address,
         'contract_address': contract_address,
