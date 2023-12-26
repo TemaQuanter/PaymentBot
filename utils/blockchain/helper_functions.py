@@ -106,14 +106,20 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
         return_message = (False, "Wrong recipient")
 
     # Try to insert transaction into used transactions.
-    try:
-        if not db.insert_validated_transaction(
-                transaction_details["transaction_id"], datetime.utcfromtimestamp(transaction_details['timestamp'])):
-            # The transaction is already registered.
-            return_message = (False, "This transaction has been already used")
+    # Check if transaction is valid (otherwise it may be exploited in a way
+    # that decent users will not be able to complete the payment)
+    if return_message[0]:
+        # The transaction is valid.
+        # Now check if it was used for payment.
+        try:
+            if not db.insert_validated_transaction(
+                    transaction_details["transaction_id"], datetime.utcfromtimestamp(transaction_details['timestamp'])):
+                # The transaction is already registered.
+                return_message = (
+                    False, "This transaction has been already used")
 
-    except psycopg2.DatabaseError as e:
-        return_message = (False, "Internal server error")
+        except psycopg2.DatabaseError as e:
+            return_message = (False, "Internal server error")
 
     # Close database connection.
     db.close_connection()
