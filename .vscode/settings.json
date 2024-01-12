@@ -5,6 +5,8 @@
     "ntplib",
     "psycopg",
     "SMARTCONTRACT",
-    "tronapi"
+    "tronapi",
+    "TRONGRID",
+    "tronpy"
 ]
 }

@@ -2,12 +2,11 @@
 
 from random import randint
 from ..database.database import PostgresDB
-from ..database.models.user import User
 
-import ntplib
-from datetime import datetime, timezone
+from datetime import datetime
 
-from tronapi import Tron
+from tronpy import Tron
+from tronpy.providers import HTTPProvider
 
 import os
 import psycopg2
@@ -17,14 +16,23 @@ import time
 from ..constants import PAYMENT_TIME_LIMIT_DELTA
 
 
-def get_ntp_time(server="pool.ntp.org"):
-    """This function retrieves precise UTC timestamp."""
-    client = ntplib.NTPClient()
-    response = client.request(server)
-    utc_time = datetime.utcfromtimestamp(response.tx_time)
-    # Set the correct timezone
-    utc_time = utc_time.replace(tzinfo=timezone.utc)
-    return utc_time
+# def get_ntp_time(server="pool.ntp.org"):
+#     """This function retrieves precise UTC timestamp."""
+#     client = ntplib.NTPClient()
+#     response = client.request(server)
+#     utc_time = datetime.utcfromtimestamp(response.tx_time)
+#     # Set the correct timezone
+#     utc_time = utc_time.replace(tzinfo=timezone.utc)
+#     return utc_time
+
+def get_tron_client() -> Tron:
+    """This function returns a tron client."""
+
+    # Get a tron provider.
+    provider = HTTPProvider(api_key=os.getenv("TRONGRID_API_KEY"))
+
+    # Return a tron client with API key connection.
+    return Tron(provider=provider)
 
 
 def get_unique_amount_usdt(amount: str) -> str:
@@ -46,7 +54,7 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
     If the payment is valid, the function returns True, False - otherwise."""
 
     # Establish connection with Tron blockchain.
-    tron = Tron()
+    tron = get_tron_client()
 
     # Return message.
     return_message = (True, "OK")
@@ -55,7 +63,7 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
     while True:
         try:
             # Query transaction info.
-            transaction_info = tron.trx.get_transaction_info(
+            transaction_info = tron.get_transaction_info(
                 transaction_details["transaction_id"])
 
             # Check if the block is confirmed.

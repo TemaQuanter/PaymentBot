@@ -3,8 +3,6 @@
 
 import os
 
-from tronapi import Tron
-
 import psycopg2
 
 from string import punctuation, whitespace, ascii_letters
@@ -26,7 +24,7 @@ from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
 from .helper_functions import build_keyboard, send_message
-from ..blockchain.helper_functions import get_unique_amount_usdt, verify_payment_validity
+from ..blockchain.helper_functions import get_tron_client, get_unique_amount_usdt, verify_payment_validity
 from ..blockchain.transaction import extract_transaction_details
 
 from ..database.models.user import User
@@ -224,7 +222,8 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
     await send_message("You have <b>1 hour</b> max to make a payment.\n\n" +
-                       f"Send <b>exactly</b> <code>{invoice.amount_due}</code> USDT to <code>{payment_address}</code> in Tron (TRX)\n\n"
+                       f"Send <b>exactly</b> <code>{invoice.amount_due}</code> USDT to <code>{
+                           payment_address}</code> in Tron (TRX)\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
                        f"Send it without any extra symbols, letters or digits, just transaction hash/id", update, context)
 
@@ -246,11 +245,11 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                        "It may take several minutes", update, context)
 
     # Get a connection to a Tron node.
-    tron = Tron()
+    tron = get_tron_client()
 
     # Try to get the transaction from tron blockchain.
     try:
-        transaction_raw_data = tron.trx.get_transaction(transaction_hash)
+        transaction_raw_data = tron.get_transaction(transaction_hash)
 
     except ValueError:
         # Inform a user that the transaction is not found.

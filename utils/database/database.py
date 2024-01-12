@@ -177,6 +177,25 @@ class PostgresDB:
         invoice = Invoice(rows[0][0], rows[0][1], rows[0][2], rows[0][3])
 
         return invoice
+    
+    def get_all_invoice_prices(self) -> List[str]:
+        """This function returns all invoice prices that are currently valid."""
+        
+        # Execute the command.
+        self.__cursor.execute(
+            "SELECT amount_due FROM invoice WHERE payment_expiration_timestamp < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');")
+        
+        # Get data.
+        rows = self.__cursor.fetchall()
+
+        # All invoice prices.
+        invoice_prices = list()
+
+        # Traverse each row and get invoice prices.
+        for row in rows:
+            invoice_prices.append(row[0])
+
+        return invoice_prices
 
     def remove_invoice(self, telegram_user_id: int) -> None:
         """This function removes invoice from the database."""

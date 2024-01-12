@@ -1,11 +1,10 @@
 from datetime import datetime
-from tronapi import Tron
+from tronpy import Tron
 
 
-def hex_to_base58(hex_str: str, tron: Tron):
-    """ Convert hex string to Tron's base58 address. """
-    # Use Tron's address property for conversion
-    return tron.address.from_hex(hex_str).decode('utf-8')
+def from_sun(value_sun) -> float:
+    """Convert value in SUN to TRX (1 SUN = 0.000001 TRX)."""
+    return value_sun / 1000000
 
 
 def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
@@ -37,17 +36,17 @@ def extract_transaction_details(transaction_json: dict, tron: Tron) -> dict:
         return None
 
     # Decode hex to base58 for addresses
-    sender_address = hex_to_base58(owner_address_hex, tron)
-    contract_address = hex_to_base58(contract_address_hex, tron)
+    sender_address = tron.to_base58check_address(owner_address_hex)
+    contract_address = tron.to_base58check_address(contract_address_hex)
 
     # Extract receiver address and value from data
     # Skipping first 10 bytes (method ID), next 32 bytes are the receiver address
     receiver_address_hex = "41" + data_hex[32:72]
-    receiver_address = hex_to_base58(receiver_address_hex, tron)
+    receiver_address = tron.to_base58check_address(receiver_address_hex)
 
     # Last 32 bytes are the value (in hex)
     value_hex = data_hex[72:]
-    value = tron.fromSun(int(value_hex, 16))
+    value = from_sun(int(value_hex, 16))
 
     # Convert timestamp to UTC
     # timestamp_utc = datetime.utcfromtimestamp(
