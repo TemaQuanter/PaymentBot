@@ -3,7 +3,7 @@
 from random import randint
 from ..database.database import PostgresDB
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from tronpy import Tron
 from tronpy.providers import HTTPProvider
@@ -39,14 +39,37 @@ def get_unique_amount_usdt(amount: str) -> str:
     """This function returns a unique amount USDT to be payed to identify
     the transaction."""
 
+    # Get a database connection.
+    db = PostgresDB()
+
     # 4-digit ending to identify the transaction.
-    unique_ending = "."
+    unique_ending = ""
 
     # Get 4-digit ending to identify the transaction.
     for _ in range(4):
         unique_ending += str(randint(0, 9))
 
-    return amount + unique_ending
+    unique_amount = amount + "." + unique_ending
+
+    # Make sure that the generated amount is completely unique.
+
+    # Get all amounts that are already in use.
+    all_unique_amounts = db.get_all_invoice_prices()
+
+    # Traverse all possible values until the unique amount is found.
+    for i in range(1, 10001):
+        # Check if the value is not already in use.
+        # Add '00' in order to make 6-figure decimal part for comparison.
+        if (unique_amount + '00') not in all_unique_amounts:
+            break
+
+        # Increment unique ending by 1 mod 10000.
+        unique_amount = f"{amount}.{((int(unique_ending) + i) % 10000):04d}"
+    else:
+        # All unique values are busy.
+        raise Exception("All unique endings are busy")
+
+    return unique_amount
 
 
 def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (bool, str):
@@ -97,12 +120,12 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
         return_message = (False, "Incorrect value")
 
     # Check if the transaction was made on time.
-    if invoice.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcfromtimestamp(transaction_details['timestamp']):
+    if invoice.payment_expiration_timestamp < datetime.utcfromtimestamp(transaction_details['timestamp']).replace(tzinfo=timezone.utc):
         return_message = (False, "Timestamp expired")
 
     # Check if the transactions is not an old transaction.
     # The the payment was not made before the request.
-    if invoice.payment_expiration_timestamp.replace(tzinfo=None) - PAYMENT_TIME_LIMIT_DELTA > datetime.utcfromtimestamp(transaction_details['timestamp']):
+    if invoice.payment_expiration_timestamp - PAYMENT_TIME_LIMIT_DELTA > datetime.utcfromtimestamp(transaction_details['timestamp']).replace(tzinfo=timezone.utc):
         return_message = (False, "Timestamp too old")
 
     # Check that the smart-contract is the required one.

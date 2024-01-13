@@ -182,8 +182,16 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Clear amount from any symbols.
     amount = amount.strip(punctuation + whitespace)
 
-    # Ge a unique ending for the amount to identify blockchain transaction.
-    amount = get_unique_amount_usdt(amount)
+    # Get a unique ending for the amount to identify blockchain transaction.
+    try:
+        amount = get_unique_amount_usdt(amount)
+    except Exception as e:
+        # Maximum limit of concurrent invoices is reached.
+        await send_message("Oops, there are too many users trying to make a payment at the moment.\n\n"
+                           "Please, try again later using /start command", update, context)
+
+        # End the conversation.
+        return ConversationHandler.END
 
     # Clear period from symbols.
     period = period.strip(punctuation + whitespace + ascii_letters)
@@ -199,7 +207,7 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
         invoice = db.get_invoice(update.effective_user.id)
 
         # Check if the payment expiration timestamp expired.
-        if invoice.payment_expiration_timestamp.replace(tzinfo=None) < datetime.utcnow() or int(float(invoice.amount_due)) != int(float(amount)):
+        if invoice.payment_expiration_timestamp < datetime.now(timezone.utc) or int(float(invoice.amount_due)) != int(float(amount)):
             # The timestamp expired.
             generate_new_invoice = True
 
@@ -213,7 +221,7 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     if generate_new_invoice:
         # Create a new invoice.
         invoice = Invoice(update.effective_user.id, amount,
-                          period, datetime.utcnow() + PAYMENT_TIME_LIMIT_DELTA)
+                          period, datetime.now(timezone.utc) + PAYMENT_TIME_LIMIT_DELTA)
 
         # Insert the invoice to the database.
         db.insert_invoice(invoice)
@@ -222,7 +230,7 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
     await send_message("You have <b>1 hour</b> max to make a payment.\n\n" +
-                       f"Send <b>exactly</b> <code>{invoice.amount_due}</code> USDT to <code>{
+                       f"Send <b>exactly</b> <code>{str(invoice.amount_due).rstrip("0")}</code> USDT to <code>{
                            payment_address}</code> in Tron (TRX)\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
                        f"Send it without any extra symbols, letters or digits, just transaction hash/id", update, context)

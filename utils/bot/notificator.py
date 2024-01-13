@@ -36,6 +36,9 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
         # Remove old transactions.
         db.remove_old_validated_transactions()
 
+        # Remove all expired invoices.
+        db.remove_expired_invoices()
+
         # Get all users with expired subscriptions from the database.
         expired_users = db.get_expired_not_informed_users()
 
