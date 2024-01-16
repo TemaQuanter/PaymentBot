@@ -42,18 +42,18 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
         # Get all users with expired subscriptions from the database.
         expired_users = db.get_expired_not_informed_users()
 
-        # Switch off the bot access for each user whose subscription got expired.
+        # Switch off the bot access for each user whose subscription expired.
         for expired_user in expired_users:
             # Change the status of a user to expired.
             requests.put(
                 f"{SERVICE_ADDRESS}/expired/{expired_user.telegram_id}")
 
-        # Inform all users whose subscription got expired.
+        # Inform all users whose subscription expired.
         for expired_user in expired_users:
             # Schedule the coroutine to be run on the event loop
             asyncio.run_coroutine_threadsafe(
                 application.bot.send_message(
-                    chat_id=expired_user.telegram_id, text="Your subscription got expired, to renew it, please use <code>/start</code> command.\n\n"
+                    chat_id=expired_user.telegram_id, text="Your subscription expired, to renew it, please use /start command.\n\n"
                     "Your access to the bot is currently restricted and it will not manage your assets from now on until you renew the subscription.", parse_mode="HTML"),
                 loop
             )
@@ -73,7 +73,7 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
             # Schedule the coroutine to be run on the event loop
             asyncio.run_coroutine_threadsafe(
                 application.bot.send_message(
-                    chat_id=next_to_expire_user.telegram_id, text=f"Your subscription will expire on <b>{formatted_date} UTC</b>, to renew it, please use <code>/start</code> command.\n\n", parse_mode="HTML"),
+                    chat_id=next_to_expire_user.telegram_id, text=f"Your subscription will expire on <b>{formatted_date} UTC</b>, to renew it, please use /start command.\n\n", parse_mode="HTML"),
                 loop
             )
 

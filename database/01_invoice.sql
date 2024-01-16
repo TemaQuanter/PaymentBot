@@ -4,7 +4,7 @@ CREATE TABLE invoice(
     -- A unique identifier of a user in telegram.
     telegram_user_id BIGINT PRIMARY KEY,
     -- Amount due.
-    amount_due NUMERIC(12, 6) NOT NULL,
+    amount_due NUMERIC(12, 6) NOT NULL UNIQUE,
     -- Subscription period.
     days_valid INT NOT NULL,
     -- Payment expiration timestamp.

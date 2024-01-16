@@ -24,7 +24,7 @@ from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
 from .helper_functions import build_keyboard, send_message
-from ..blockchain.helper_functions import get_tron_client, get_unique_amount_usdt, verify_payment_validity
+from ..blockchain.helper_functions import get_tron_client, insert_invoice_with_unique_amount_usdt, verify_payment_validity
 from ..blockchain.transaction import extract_transaction_details
 
 from ..database.models.user import User
@@ -177,24 +177,13 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.edit_message_reply_markup()
 
     # Get amount and the period separately.
-    amount, period = query.data.split('/')
+    amount, days_valid = query.data.split('/')
 
     # Clear amount from any symbols.
     amount = amount.strip(punctuation + whitespace)
 
-    # Get a unique ending for the amount to identify blockchain transaction.
-    try:
-        amount = get_unique_amount_usdt(amount)
-    except Exception as e:
-        # Maximum limit of concurrent invoices is reached.
-        await send_message("Oops, there are too many users trying to make a payment at the moment.\n\n"
-                           "Please, try again later using /start command", update, context)
-
-        # End the conversation.
-        return ConversationHandler.END
-
     # Clear period from symbols.
-    period = period.strip(punctuation + whitespace + ascii_letters)
+    days_valid = days_valid.strip(punctuation + whitespace + ascii_letters)
 
     # Establish database connection.
     db = PostgresDB()
@@ -219,17 +208,22 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Check if it is necessary to generate a new invoice.
     if generate_new_invoice:
-        # Create a new invoice.
-        invoice = Invoice(update.effective_user.id, amount,
-                          period, datetime.now(timezone.utc) + PAYMENT_TIME_LIMIT_DELTA)
+        # Generate an invoice with a unique ending for the amount to identify blockchain transaction.
+        try:
+            invoice = insert_invoice_with_unique_amount_usdt(
+                update.effective_user.id, amount, days_valid)
+        except Exception as e:
+            # Maximum limit of concurrent invoices is reached.
+            await send_message("Oops, there are too many users trying to make a payment at the moment.\n\n"
+                               "Please, try again later using /start command", update, context)
 
-        # Insert the invoice to the database.
-        db.insert_invoice(invoice)
+            # End the conversation.
+            return ConversationHandler.END
 
     # Get payment address.
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
-    await send_message("You have <b>1 hour</b> max to make a payment.\n\n" +
+    await send_message(f"You have <b>{(invoice.payment_expiration_timestamp - datetime.now(timezone.utc)).seconds // 60} minutes</b> max to make a payment.\n\n" +
                        f"Send <b>exactly</b> <code>{str(invoice.amount_due).rstrip("0")}</code> USDT to <code>{
                            payment_address}</code> in Tron (TRX)\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"

@@ -1,6 +1,8 @@
 # This file contains some helper functions to work with blockchain.
 
 from random import randint
+
+from utils.database.models.invoice import Invoice
 from ..database.database import PostgresDB
 
 from datetime import datetime, timezone
@@ -35,12 +37,15 @@ def get_tron_client() -> Tron:
     return Tron(provider=provider)
 
 
-def get_unique_amount_usdt(amount: str) -> str:
-    """This function returns a unique amount USDT to be payed to identify
-    the transaction."""
+def insert_invoice_with_unique_amount_usdt(telegram_id: int, amount: str, days_valid: int) -> str:
+    """This function creates an invoice that is possible
+    to uniquely identify in blockchain and returns it."""
 
     # Get a database connection.
     db = PostgresDB()
+
+    # Remove all expired invoices.
+    db.remove_expired_invoices()
 
     # 4-digit ending to identify the transaction.
     unique_ending = ""
@@ -61,15 +66,32 @@ def get_unique_amount_usdt(amount: str) -> str:
         # Check if the value is not already in use.
         # Add '00' in order to make 6-figure decimal part for comparison.
         if (unique_amount + '00') not in all_unique_amounts:
-            break
+            # Create a new invoice.
+            invoice = Invoice(telegram_id, unique_amount,
+                              days_valid, datetime.now(timezone.utc) + PAYMENT_TIME_LIMIT_DELTA)
+
+            # Try to insert the invoice into the database.
+            try:
+                db.insert_invoice(invoice)
+
+                # Insertion was successful, exit the loop.
+                break
+            except psycopg2.errors.UniqueViolation:
+                # An invoice with the same amount due is already in the database.
+                pass
 
         # Increment unique ending by 1 mod 10000.
         unique_amount = f"{amount}.{((int(unique_ending) + i) % 10000):04d}"
     else:
         # All unique values are busy.
+        # Close database connection.
+        db.close_connection()
         raise Exception("All unique endings are busy")
 
-    return unique_amount
+    # Close database connection.
+    db.close_connection()
+
+    return invoice
 
 
 def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (bool, str):
