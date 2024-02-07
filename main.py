@@ -23,8 +23,9 @@ telegram_bot_api = os.getenv("TG_BOT_API")
 # Get the bot.
 application = get_bot(telegram_bot_api)
 
-# Create a new event loop
+# Create a new event loop and set it.
 loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
 # Run a notification cron task that makes subscriptions expire
 # and notifies the users.

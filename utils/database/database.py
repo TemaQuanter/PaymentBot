@@ -225,7 +225,7 @@ class PostgresDB:
 
         # Execute the command.
         self.__cursor.execute(
-            "SELECT * FROM subscription_plans;")
+            "SELECT * FROM subscription_plans ORDER BY amount_due;")
 
         # Get data.
         rows = self.__cursor.fetchall()
