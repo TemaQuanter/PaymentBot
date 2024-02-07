@@ -160,8 +160,8 @@ async def decline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     await query.edit_message_reply_markup()
 
-    await send_message("Perhaps, see you next time:)\n"
-                       "If you change your mind, use <code>/start</code> command", update, context)
+    await send_message("Perhaps, see you next time :)\n"
+                       "If you change your mind, use /start command", update, context)
 
     # End a conversation with a user.
     return ConversationHandler.END
@@ -317,7 +317,7 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await send_message(f"Access till <b>{formatted_date} UTC</b>", update, context)
 
         # Send a final message.
-        await send_message("To renew subscription later, use <code>/start</code>", update, context)
+        await send_message("To renew subscription later, use /start", update, context)
     else:
         # Inform the user that the transaction did not pass verification.
         await send_message("The transaction did not pass verification.\n\n"
