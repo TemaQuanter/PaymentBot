@@ -251,7 +251,7 @@ class PostgresDB:
         user = self.get_user(user.telegram_id)
 
         # If it is None, then use the current time to calculate the expiration time.
-        if user.subscription_expiration_timestamp == None:
+        if user.subscription_expiration_timestamp == None or user.subscription_expiration_timestamp < datetime.now(timezone.utc):
             user.subscription_expiration_timestamp = datetime.now(
                 timezone.utc) + period
         else:
