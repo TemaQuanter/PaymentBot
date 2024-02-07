@@ -138,7 +138,7 @@ def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (boo
         return_message = (False, "Transaction failed")
 
     # Check if the amount in transaction is the same as requested.
-    if invoice.amount_due != transaction_details["value"]:
+    if str(invoice.amount_due).rstrip("0") != str(transaction_details["value"]).rstrip("0"):
         return_message = (False, "Incorrect value")
 
     # Check if the transaction was made on time.
