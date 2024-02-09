@@ -223,11 +223,15 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Get payment address.
     payment_address = os.getenv("TRON_WALLET_ADDRESS")
 
-    await send_message(f"You have <b>{(invoice.payment_expiration_timestamp - datetime.now(timezone.utc)).seconds // 60} minutes</b> max to make a payment.\n\n" +
+    await send_message(f"You have <b>{(max(invoice.payment_expiration_timestamp - datetime.now(timezone.utc), timedelta(minutes=0))).seconds // 60} minutes</b> max to make a payment.\n\n" +
                        f"Send <b>exactly</b> <code>{str(invoice.amount_due).rstrip("0")}</code> USDT to <code>{
                            payment_address}</code> in Tron (TRX)\n\n"
+                       f"Subscription period: <b>{
+                           invoice.days_valid} days</b>\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
-                       f"Send it without any extra symbols, letters or digits, just transaction hash/id", update, context)
+                       f"Send it without any extra symbols, letters or digits, just transaction hash/id\n\n"
+                       "<b>⚠️ WARNING:</b> Do NOT use <code>/start</code> command during the payment process, it may lead to loss of your funds!"
+                       "Use it ONLY in case you want to choose another billing plan and you have not made any funds transfers yet", update, context)
 
     # Close database connection.
     db.close_connection()
@@ -322,7 +326,7 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Inform the user that the transaction did not pass verification.
         await send_message("The transaction did not pass verification.\n\n"
                            "Please, try submitting transaction hash/id once again\n\n"
-                           "If you are sure, that you did submitted the right transaction hash "
+                           "If you are sure, that you did submit the right transaction hash, "
                            f"you can contact support here\n\n{SUPPORT_CREDENTIALS}", update, context)
 
         await send_message(f"Error message: {verification_verdict[1]}", update, context)

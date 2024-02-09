@@ -2,6 +2,8 @@
 
 from random import randint
 
+from typing import Tuple
+
 from utils.database.models.invoice import Invoice
 from ..database.database import PostgresDB
 
@@ -94,7 +96,7 @@ def insert_invoice_with_unique_amount_usdt(telegram_id: int, amount: str, days_v
     return invoice
 
 
-def verify_payment_validity(transaction_details: dict, telegram_id: int) -> (bool, str):
+def verify_payment_validity(transaction_details: dict, telegram_id: int) -> Tuple[bool, str]:
     """This function verifies the payment validity.
     If the payment is valid, the function returns True, False - otherwise."""
 
