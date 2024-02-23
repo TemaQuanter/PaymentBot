@@ -230,7 +230,7 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
                            invoice.days_valid} days</b>\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"
                        f"Send it without any extra symbols, letters or digits, just transaction hash/id\n\n"
-                       "<b>⚠️ WARNING:</b> Do NOT use <code>/start</code> command during the payment process, it may lead to loss of your funds!"
+                       "<b>⚠️ WARNING:</b> Do NOT use <code>/start</code> command during the payment process, it may lead to loss of your funds! "
                        "Use it ONLY in case you want to choose another billing plan and you have not made any funds transfers yet", update, context)
 
     # Close database connection.
