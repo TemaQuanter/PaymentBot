@@ -24,14 +24,14 @@ from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
 from .helper_functions import build_keyboard, send_message
-from ..blockchain.helper_functions import get_tron_client, insert_invoice_with_unique_amount_usdt, verify_payment_validity
-from ..blockchain.transaction import extract_transaction_details
+from src.utils.blockchain.helper_functions import get_tron_client, insert_invoice_with_unique_amount_usdt, verify_payment_validity
+from src.utils.blockchain.transaction import extract_transaction_details
 
-from ..database.models.user import User
-from ..database.database import PostgresDB
-from ..database.models.invoice import Invoice
+from src.utils.database.models.user import User
+from src.utils.database.database import PostgresDB
+from src.utils.database.models.invoice import Invoice
 
-from ..constants import PAYMENT_TIME_LIMIT_DELTA, POLICY_PATH, SERVICE_ADDRESS, SERVICE_URL, SUPPORT_CREDENTIALS
+from src.utils.constants import PAYMENT_TIME_LIMIT_DELTA, POLICY_PATH, SERVICE_ADDRESS, SERVICE_URL, SUPPORT_CREDENTIALS
 
 import requests
 
@@ -225,7 +225,8 @@ async def choose_billing_plan(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await send_message(f"You have <b>{(max(invoice.payment_expiration_timestamp - datetime.now(timezone.utc), timedelta(minutes=0))).seconds // 60} minutes</b> max to make a payment.\n\n" +
                        f"Send <b>exactly</b> <code>{str(invoice.amount_due).rstrip("0")}</code> USDT to <code>{
-                           payment_address}</code> in Tron (TRX)\n\n"
+                           payment_address}</code> in Tron blockchain (TRX)\n\n"
+                       "<b>NOTE:</b> The amount DOES NOT include any transaction fees.\n\n"
                        f"Subscription period: <b>{
                            invoice.days_valid} days</b>\n\n"
                        f"Afterwards, send me transaction hash/id, so, that I could verify the payment\n\n"

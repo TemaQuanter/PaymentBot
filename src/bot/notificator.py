@@ -2,9 +2,9 @@
 
 from telegram.ext import Application
 
-from utils.constants import SERVICE_ADDRESS
+from src.utils.constants import SERVICE_ADDRESS
 
-from ..database.database import PostgresDB
+from src.utils.database.database import PostgresDB
 
 import time
 
@@ -45,8 +45,11 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
         # Switch off the bot access for each user whose subscription expired.
         for expired_user in expired_users:
             # Change the status of a user to expired.
-            requests.put(
-                f"{SERVICE_ADDRESS}/expired/{expired_user.telegram_id}")
+            try:
+                requests.put(
+                    f"{SERVICE_ADDRESS}/expired/{expired_user.telegram_id}")
+            except Exception as e:
+                print(e)
 
         # Inform all users whose subscription expired.
         for expired_user in expired_users:
@@ -57,6 +60,9 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
                     "Your access to the bot is currently restricted and it will not manage your assets from now on until you renew the subscription.", parse_mode="HTML"),
                 loop
             )
+
+            # Respect Telegram API Limits.
+            time.sleep(40)
 
         # Mark all users as informed that their subscription got expired.
         db.mark_as_informed(expired_users)
@@ -76,6 +82,9 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
                     chat_id=next_to_expire_user.telegram_id, text=f"Your subscription will expire on <b>{formatted_date} UTC</b>, to renew it, please use /start command.\n\n", parse_mode="HTML"),
                 loop
             )
+
+            # Respect Telegram API Limits.
+            time.sleep(40)
 
         # Disconnect from the database.
         db.close_connection()

@@ -5,13 +5,14 @@ from dotenv import load_dotenv
 
 import os
 
-from utils.bot.bot import get_bot
-from utils.bot.notificator import notify
 
 from telegram import Update
 
 import threading
 import asyncio
+
+from src.bot.bot import get_bot
+from src.bot.notificator import notify
 
 
 # Load environment variables from .env file.

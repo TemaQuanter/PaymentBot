@@ -4,8 +4,6 @@ from random import randint
 
 from typing import Tuple
 
-from utils.database.models.invoice import Invoice
-from ..database.database import PostgresDB
 
 from datetime import datetime, timezone
 
@@ -16,6 +14,9 @@ import os
 import psycopg2
 
 import time
+
+from src.utils.database.database import PostgresDB
+from src.utils.database.models.invoice import Invoice
 
 from ..constants import PAYMENT_TIME_LIMIT_DELTA
 
