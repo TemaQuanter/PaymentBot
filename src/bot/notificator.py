@@ -84,7 +84,7 @@ def notify(application: Application, loop: AbstractEventLoop) -> None:
             )
 
             # Respect Telegram API Limits.
-            time.sleep(40)
+            time.sleep(0.04)
 
         # Disconnect from the database.
         db.close_connection()
